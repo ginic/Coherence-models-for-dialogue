@@ -1,11 +1,6 @@
 from __future__ import print_function
 from future.utils import iteritems
 from builtins import dict
-from load_grids import GridLoader
-# from sklearn.feature_extraction.text import CountVectorizer
-from coherence_models_for_dialogue.corpus.Switchboard.Switchboard import Switchboard
-from generate_grid import corpora_paths, get_corpus
-from generate_shuffled import GridShuffler
 from itertools import permutations
 from collections import defaultdict
 from sklearn.metrics import accuracy_score
@@ -19,10 +14,21 @@ import pandas as pd
 import os
 import errno
 
+from coherence_models_for_dialogue.load_grids import GridLoader
+from coherence_models_for_dialogue.corpus.Switchboard.Switchboard import Switchboard
+from coherence_models_for_dialogue.generate_grid import corpora_paths, get_corpus
+from coherence_models_for_dialogue.generate_shuffled import GridShuffler
+
+
+# VP added: task names
+REORDERING='reordering'
+INSERTION='insertion'
+CAST='cast'
+
 class EntitiesFeatureExtractor(object):
 
     #VP: Tweaked params to allow for passing grids directly to object
-    def __init__(self, grid_loader=None, grid_folder=None, grids=None, grid_params=None):
+    def __init__(self, grid_loader=None, grid_folder=None, grids=None, grid_params=None, shuffle_off=False):
         if grids and grid_params:
             self.grids = grids
             self.grids_params = grid_params    
@@ -40,7 +46,11 @@ class EntitiesFeatureExtractor(object):
             self.grids, self.grids_params = self.grid_loader.get_data()
         
         self.vocabulary = self.get_vocabulary()
-        self.grid_shuffler = GridShuffler(grid_folder=grid_folder, grid_loader=grid_loader)
+
+        if shuffle_off:
+            self.grid_shuffler=None
+        else:
+            self.grid_shuffler = GridShuffler(grid_folder=grid_folder, grid_loader=grid_loader)
 
     def update_grids_dct(self, grid_names):
         self.grids = {k:v for k,v in iteritems(self.grids) if k in grid_names}
@@ -66,9 +76,7 @@ class EntitiesFeatureExtractor(object):
         else:
             return probs_grid_i
 
-
-
-    # TODO Use this but without shuffling
+    # VP: For CAsT, use this but without shuffling
     def extract_transitions_probs(self,
                                   corpus_dct=None,
                                   transition_range=(2, 2),
@@ -95,25 +103,31 @@ class EntitiesFeatureExtractor(object):
 
         # grid_names = ['sw_0001_4325.utt', 'sw_0002_4330.utt', 'sw_0003_4103.utt'] # Testing mode
         # grid_names = ['sw_0755_3018.utt']
-        grid_names = [n for n in corpus_dct.keys() if n!='.DS_Store'] #[:10] # Testing mode
-        self.update_grids_dct(grid_names)
+        if task != CAST:
+            grid_names = [n for n in corpus_dct.keys() if n!='.DS_Store'] #[:10] # Testing mode
+            self.update_grids_dct(grid_names)
+        else: 
+            grid_names = list(self.grids.keys())
 
         # print('Grids keys : ', grid_names)
         # permuted_files = self.grid_shuffler.generate_shuffled_grids(corpus_dct=corpus_dct, only_grids=grid_names, df=True)
 
-        if task=='reordering':
+        if task==REORDERING:
             permuted_files = self.grid_shuffler.generate_shuffled_grids(corpus_dct=corpus_dct, only_grids=grid_names,
                                                                         corpus_name=corpus_name,
                                                                         saliency=saliency, df=False)
-        else:
+        elif task==INSERTION:
             permuted_files = self.grid_shuffler.generate_grids_for_insertion(corpus_dct=corpus_dct,
                                                                              only_grids=grid_names,
                                                                              corpus_name=corpus_name,
                                                                              saliency=saliency, df=False)
+        else:
+            # VP: Just use single original dataframe for Cast
+            permuted_files = {k:[v] for (k,v) in self.grids.items()}
 
         print('Permutation files len: ', len(permuted_files))
         print('First permut len: ', len(permuted_files[grid_names[0]]))
-        # print('First permut example shape: ', permuted_files[grid_names[0]][0].shape)
+        print('First permut example shape: ', permuted_files[grid_names[0]][0].shape)
 
         # Compute probs per grid
         for grid_i_name in tqdm.tqdm(grid_names):
@@ -134,26 +148,28 @@ class EntitiesFeatureExtractor(object):
             transitions_count = self.get_total_numb_trans_given(grid_i, transition_range)
 
             # The first probs distribution in probs_grid_i is the original one
-            if task=='reordering':
+            if task==REORDERING:
                 grids_transitions_dict[grid_i_name] = [self.get_transitions_probs_for_grid(trans2id, grid_ij,
                                                                                            transitions_count, transition_range,
                                                                                            logprobs=logprobs)
                                                        for grid_ij in [grid_i]+permutations_i]
-            else:
+            elif task==INSERTION:
                 original = [self.get_transitions_probs_for_grid(trans2id, grid_i, transitions_count,
                                                                transition_range, logprobs=logprobs)]
                 reinserted = [[self.get_transitions_probs_for_grid(trans2id, grid_jy,
                                                                   transitions_count, transition_range,logprobs=logprobs) for grid_jy in sent_ind_j]
                                                        for sent_ind_j in permutations_i]
                 grids_transitions_dict[grid_i_name] = original+reinserted # TODO: for reinsertion we need one iter per turn removed
-
+            elif task==CAST:
+                grids_transitions_dict[grid_i_name] = [self.get_transitions_probs_for_grid(trans2id, grid_i, transitions_count,
+                                                               transition_range, logprobs=logprobs)]
+                
             self.grids.pop(grid_i_name)
 
         return grids_transitions_dict
 
 
     def show_probs(self, probs_grid_i, top=30):
-
         for i, x in enumerate(sorted(probs_grid_i, key=lambda x: probs_grid_i[x])):
             print(probs_grid_i[x], " : ", x)
             if i==top:

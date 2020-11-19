@@ -533,7 +533,7 @@ class GridGenerator(object):
 
                 formatted_grid = self.sort_grid_entity_appearance(grids_dct[dialogue_id])
                 formatted_grid = self.turn_grids_into_to_write(formatted_grid)
-                dump_csv(full_path+dialogue_id, formatted_grid)
+                dump_csv(os.path.join(full_path, dialogue_id), formatted_grid)
             else:
                 empty_dials.append(dialogue_id)
         print('Empty dialogue id: ', empty_dials)

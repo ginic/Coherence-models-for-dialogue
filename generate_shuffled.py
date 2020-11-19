@@ -1,11 +1,7 @@
 from __future__ import print_function
 from future.utils import iteritems
 from builtins import dict
-from coherence_models_for_dialogue.corpus.Switchboard.Switchboard import Switchboard
-from generate_grid import dump_csv, GridGenerator
-from load_grids import GridLoader
 from itertools import groupby
-from generate_grid import corpora_paths, get_corpus
 from pandas.util.testing import assert_frame_equal
 from operator import itemgetter
 import itertools
@@ -19,6 +15,11 @@ import logging
 import random
 import os
 import numpy as np
+
+from coherence_models_for_dialogue.corpus.Switchboard.Switchboard import Switchboard
+from coherence_models_for_dialogue.generate_grid import dump_csv, GridGenerator
+from coherence_models_for_dialogue.generate_grid import corpora_paths, get_corpus
+from coherence_models_for_dialogue.load_grids import GridLoader
 
 warnings.simplefilter('error', UserWarning)
 
