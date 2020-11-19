@@ -5,7 +5,7 @@ import os
 import csv
 import re
 from .DAMSL import DAMSL
-from corpus.Corpus import Corpus
+from coherence_models_for_dialogue.corpus.Corpus import Corpus
 
 """
 Switchboard class: loads the corpus into tuples (sentence,DA,prevDA). Provides methods

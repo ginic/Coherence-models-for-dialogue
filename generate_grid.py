@@ -1,10 +1,10 @@
 from __future__ import print_function
 from future.utils import iteritems
 from builtins import dict
-from corpus.Switchboard.Switchboard import Switchboard
-from corpus.Oasis.Oasis import Oasis
-from corpus.Maptask.Maptask import Maptask
-from corpus.AMI.AMI import AMI
+from coherence_models_for_dialogue.corpus.Switchboard.Switchboard import Switchboard
+from coherence_models_for_dialogue.corpus.Oasis.Oasis import Oasis
+from coherence_models_for_dialogue.corpus.Maptask.Maptask import Maptask
+from coherence_models_for_dialogue.corpus.AMI.AMI import AMI
 from collections import OrderedDict
 from itertools import groupby
 from operator import itemgetter
@@ -53,7 +53,6 @@ Mention detection: all NPs (not only heads), non-head nouns are given the role X
 Files generated with spacy 1
 
  '''
-
 all_datasets_path = '../../Datasets/'
 corpora_paths = {'Switchboard': all_datasets_path + 'Switchboard/data/switchboard1-release2/',
                  'Oasis': all_datasets_path + 'Oasis',
@@ -76,21 +75,21 @@ def get_corpus(corpus_name):
 
 
 class GridGenerator(object):
-
-    def __init__(self, nlp=None, coref=None):
+    # VP added options to make it possible to change spacy models
+    def __init__(self, nlp=None, coref=None, spacy_model='en_core_web_sm'):
         if nlp is None:
             print("Loading spacy model")
             try:
-                spacy.info('en_core_web_sm')
-                model = 'en_core_web_sm'
+                spacy.info(spacy_model)
             except IOError:
                 print("No spacy 2 model detected, using spacy1 'en' model")
-                model = 'en'
-            self.nlp = spacy.load(model)
+                spacy_model = 'en'
+            self.nlp = spacy.load(spacy_model)
 
         if not coref:
             try:
-                from neuralcoref_lib.neuralcoref import Coref
+                #from neuralcoref_lib.neuralcoref import Coref
+                from neuralcoref import Coref
                 self.coref = Coref(nlp=self.nlp)
             except:
                 self.coref = coref
@@ -150,11 +149,11 @@ class GridGenerator(object):
 
     def filter_non_nouns(self, token_span):
         # Keep only nouns and pronouns (strip adjectives etc. from NPs)
-        token_span = [[token for token in np if token.pos_ in self.spacy_tags['pos']['noun']+
+        token_span = [[token for token in noun_phrase if token.pos_ in self.spacy_tags['pos']['noun']+
                                                             self.spacy_tags['pos']['pronoun']]
-                     for np in token_span]
+                     for noun_phrase in token_span]
         return token_span
-
+	
     def extract_nps(self, parsed_utt, NEs=None,
                     include_prons=False, exclude_conversation_prons=True):
 
@@ -274,7 +273,7 @@ class GridGenerator(object):
         else:
             raise TypeError("Not implemented tag type")
 
-        # print("Tagged entities: ", entity_tags)
+        #print("Tagged entities: ", entity_tags)
         return entity_tags
 
     def group_same_utt_entities(self, current_entities, tag_type):
@@ -400,10 +399,11 @@ class GridGenerator(object):
             # # test_utt = u'Hello!'
             # dialogue[0] = (u'test', test_utt, u'A', -2)
             # dialogue[1] = (u'test', test_utt2, u'B', -1)
-
+            """
+            VP Comment out for CAsT project - this isn't available in neuralcoref v2.0
             if self.coref is not None:
                 self.coref.clean_history()
-
+            """
             # previous_mentions = 0
             dialogue_entities = {} # List of turns (entity: list of turns)
             if no_entity_column is True:
@@ -412,13 +412,14 @@ class GridGenerator(object):
             # Select text span
             if group_by=="turns":
                 dialogue = self.group_turns(dialogue)
-
+            """
+            VP Comment out for CAsT project
             # Minimum 5 dialogue turns
             if len(self.group_turns(dialogue)) < 5:
                 continue
-
+            """
             # For each text span (utterance) extract list of entities
-            for tag, utt, speaker, turn_id in dialogue:
+            for i, (tag, utt, speaker, turn_id) in enumerate(dialogue):
 
                 previous_turns_len = len(list(dialogue_entities.values())[0]) if dialogue_entities.keys() else 0
 
@@ -427,7 +428,11 @@ class GridGenerator(object):
 
                 # start = timer()
                 if use_coref:
-                    self.coref.continuous_coref(utterances=utt, utterances_speakers_id=speaker)
+                    # VP Added next two lines, for appropriate coref context reset
+                    if i==0:
+                        self.coref.one_shot_coref(utterances=utt, utterances_speakers_id=speaker)
+                    else:
+                        self.coref.continuous_coref(utterances=utt, utterances_speakers_id=speaker)
 
                 # t_continuous_coref = timer()
                 # print('Time only continuous_coref: ', t_continuous_coref - start)
@@ -489,7 +494,7 @@ class GridGenerator(object):
             # break
 
         logging.info('All grids parsed')
-
+        #print('--Grid -Whole grid: ', dialogue_entities)
 
         return grids
 
@@ -515,7 +520,7 @@ class GridGenerator(object):
 
 
     def create_csv_folder(self, grids_dct, options, folder_name, folder_path, corpus_name, min_len_dial = 1):
-        full_path = folder_path + corpus_name +'/'+folder_name+'/'
+        full_path = os.path.join(folder_path + corpus_name, folder_name)
         logging.info('Creating output directory: %s', full_path)
 
         if not os.path.exists(full_path):

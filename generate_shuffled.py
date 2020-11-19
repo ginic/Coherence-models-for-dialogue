@@ -1,7 +1,7 @@
 from __future__ import print_function
 from future.utils import iteritems
 from builtins import dict
-from corpus.Switchboard.Switchboard import Switchboard
+from coherence_models_for_dialogue.corpus.Switchboard.Switchboard import Switchboard
 from generate_grid import dump_csv, GridGenerator
 from load_grids import GridLoader
 from itertools import groupby

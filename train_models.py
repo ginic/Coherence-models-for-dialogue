@@ -3,70 +3,30 @@ from future.utils import iteritems
 from builtins import dict
 from load_grids import GridLoader
 # from sklearn.feature_extraction.text import CountVectorizer
-from corpus.Switchboard.Switchboard import Switchboard
+from coherence_models_for_dialogue.corpus.Switchboard.Switchboard import Switchboard
 from generate_grid import corpora_paths, get_corpus
 from generate_shuffled import GridShuffler
 from itertools import permutations
 from collections import defaultdict
-# from pysofia import svm_train, svm_predict, learner_type, loop_type, eta_type
 from sklearn.metrics import accuracy_score
 from numpy.random import shuffle
 from sklearn import metrics
-# import pysofia
 import tqdm
 import argparse
-# import svmlight
 import logging
 import numpy as np
 import pandas as pd
 import os
 import errno
 
-
-class EntityGridLM(object):
-    '''Class to train models and save experiments'''
-
-    def __init__(self, grid_folder=None, grid_loader=None):
-        try:
-            assert os.path.exists(grid_folder)
-        except AssertionError:
-            print("The folder " + grid_folder + " does not exist.")
-            exit(1)
-        self.grid_folder = grid_folder
-        self.grid_loader = grid_loader(self.grid_folder)
-
-    def score_document_coherence(self):
-        m = 2 # columns_num (entities)
-        n = 3 # column_length (text spans)
-        normalizer = 1/(m*n)
-        document_coherence = 0
-
-        all_entities_prob = []
-
-        # For each entity
-        for columns_num in range(len(m)):
-            single_entity_prob = []
-
-            # For each span
-            for column_len in range(len(n)):
-                # get ngrams for that span
-                span_ngrams = []
-                single_entity_prob.append()
-
-            # Sum log probs of role transitions of that entity
-            all_entities_prob.append(sum(single_entity_prob))
-
-        # Sum log probs of all entities
-        document_score = normalizer*sum(all_entities_prob)
-
-        raise NotImplementedError
-
-
 class EntitiesFeatureExtractor(object):
 
-    def __init__(self, grid_loader=None, grid_folder=None):
-
-        if grid_loader:
+    #VP: Tweaked params to allow for passing grids directly to object
+    def __init__(self, grid_loader=None, grid_folder=None, grids=None, grid_params=None):
+        if grids and grid_params:
+            self.grids = grids
+            self.grids_params = grid_params    
+        elif grid_loader:
             self.grid_loader = grid_loader
         else:
             try:
@@ -76,9 +36,9 @@ class EntitiesFeatureExtractor(object):
                 exit(1)
             self.grid_loader = GridLoader(grid_folder)
 
-        self.grids, self.grids_params = self.grid_loader.get_data()
         if not self.grids:
-            self.grids, self.grids_params = self.grid_loader.load_data()
+            self.grids, self.grids_params = self.grid_loader.get_data()
+        
         self.vocabulary = self.get_vocabulary()
         self.grid_shuffler = GridShuffler(grid_folder=grid_folder, grid_loader=grid_loader)
 
@@ -108,7 +68,7 @@ class EntitiesFeatureExtractor(object):
 
 
 
-
+    # TODO Use this but without shuffling
     def extract_transitions_probs(self,
                                   corpus_dct=None,
                                   transition_range=(2, 2),
@@ -310,6 +270,7 @@ class EntitiesFeatureExtractor(object):
         shuffle(data)
         return data
 
+    # TODO Follow this example for producing SVMLight format output
     def featurize_transitions_dct_svmlightformat(self, transitions_dict, outfile):
         # # query 1
         # 3 qid:1 1:1 2:1 3:0 4:0.2 5:0
@@ -504,176 +465,6 @@ def run(args):
             elif task == 'insertion':
                 feature_extractor.featurize_transitions_dct_svmlightformat_insertion(grids_transitions_test,
                                                                                      out_path + data_filename + '_' + filename)
-
-
-def main():
-
-    print(''.join(y for y in ["-"] * 180))
-
-    ### Params to modify ###
-
-    corpus = 'Oasis'
-    model_type = 'egrid_-coref'
-    saliency = 1
-    transition_range = (2, 2)
-    task = 'reordering'
-    only_data = ['training', 'test', 'validation']
-    # only_data = ['test','validation']
-    # only_data = ['training']
-
-    ########################
-    data_types = {'training': 'train', 'test': 'test', 'validation': 'dev'}
-    experiments_path = 'experiments/'
-    grids_data_path = 'data/'
-
-    out_path = create_path(experiments_path + corpus + '/' + task + '/' + model_type + '/')
-    grids_path = grids_data_path + corpus + '/' + model_type + '/'
-    data_filename = grids_path.split('/')[1] + '_sal' + str(saliency) + '_range' + str(transition_range[0]) + "_" + str(
-        transition_range[1])
-
-    # out_path = 'experiments/egrid_-coref_DAspan_da_noentcol/'
-    # grids_path = 'data/egrid_-coref_DAspan_da_noentcol/'
-    # out_path = 'experiments/egrid_-coref_DAspan_da_noentcol/'
-    # grids_path = 'data/egrid_-coref_DAspan_da_noentcol/'
-    # out_path = 'experiments/noents_baseline/'
-    # grids_path = 'data/noents_baseline/'
-    # simple_egrid_-coref
-
-    print('Grid folder: ', grids_path)
-    grid_loader = GridLoader(grids_path)
-
-
-    # swda_path = '../../Datasets/Switchboard/data/switchboard1-release2/'
-    # # swda_path = '../../swda/switchboard1-release2/' # server path
-    # swda = Switchboard(swda_path)
-    # corpus_dct = swda.load_csv()
-
-    corpus_dct, corpus_loader = get_corpus(corpus)
-
-    # Get train val test splits
-    experiments_split = grid_loader.get_training_test_splits(corpus_name=corpus)  # type pd.Dataframe
-    print('Train Test split', experiments_split.shape)
-    print('Training data', len(experiments_split['training']))
-    print('Test data', len(experiments_split['test']))
-
-
-
-    # Reduce data
-    # corpus_dct = {k:corpus_dct[k] for i, k in enumerate(corpus_dct.keys()) if i==0} # Testing
-
-
-    if corpus=='AMI':
-        selected_files_list = list(set([grid_name+'.' for data in only_data for grid_name in experiments_split[data].tolist()]))
-    else:
-        selected_files_list = list(set([grid_name for data in only_data for grid_name in experiments_split[data].tolist()]))
-
-    corpus_dct = {k:corpus_dct[k] for k in corpus_dct.keys() if k in selected_files_list}
-
-    feature_extractor = EntitiesFeatureExtractor(grid_folder=grids_path, grid_loader=grid_loader)
-
-
-    print('Corpus name: ', corpus)
-    print('Length selected files: ', len(selected_files_list))
-    print('Model type: ', model_type)
-    print('Data type: ', only_data)
-    print('Task: ', task)
-    print('Saliency: ', saliency)
-    print('Transition_range: ', transition_range)
-    grids_transitions_dict = feature_extractor.extract_transitions_probs(corpus_dct=corpus_dct,
-                                                                         transition_range=transition_range,
-                                                                         saliency=saliency,
-                                                                         logprobs=True,
-                                                                         corpus_name=corpus,
-                                                                         task=task)
-
-    print('Grid trans dct len: ', len(grids_transitions_dict))
-    print('Grid trans key example: ', list(grids_transitions_dict.keys())[0])
-    # print('Grid trans dct len: ', grids_transitions_dict.keys())
-
-
-
-    for data_type in only_data:
-
-        filename = data_types[data_type]
-
-        grids_transitions_test = get_grids_transitions_data(grids_transitions_dict,
-                                                            experiments_split, data_type,  corpus)
-        if task == 'reordering':
-            feature_extractor.featurize_transitions_dct_svmlightformat(grids_transitions_test,
-                                                                       out_path + data_filename + '_' + filename)
-        elif task =='insertion':
-            feature_extractor.featurize_transitions_dct_svmlightformat_insertion(grids_transitions_test,
-                                                                                 out_path + data_filename + '_' + filename)
-
-
-
-    # grids_transitions_dev = get_grids_transitions_data(grids_transitions_dict, experiments_split, 'validation', corpus)
-    # grids_transitions_train = get_grids_transitions_data(grids_transitions_dict, experiments_split, 'training', corpus)
-    #
-    #
-    # # print('Train len: ', len(grids_transitions_train), ' Test len: ', len(grids_transitions_test))
-    # # grids_transitions_train = {k: grids_transitions_test[k] for i, k in enumerate(grids_transitions_train.keys()) if i < 3}
-    #
-    # if task=='reordering':
-    #     feature_extractor.featurize_transitions_dct_svmlightformat(grids_transitions_train, out_path+data_filename+'_train')
-    #     feature_extractor.featurize_transitions_dct_svmlightformat(grids_transitions_test, out_path+data_filename+'_test')
-    #     feature_extractor.featurize_transitions_dct_svmlightformat(grids_transitions_dev, out_path + data_filename + '_dev')
-    # elif task=='insertion':
-    #     feature_extractor.featurize_transitions_dct_svmlightformat_insertion(grids_transitions_train,
-    #                                                                          out_path+data_filename+'_train')
-    #     feature_extractor.featurize_transitions_dct_svmlightformat_insertion(grids_transitions_test,
-    #                                                                          out_path + data_filename + '_test')
-    #     feature_extractor.featurize_transitions_dct_svmlightformat_insertion(grids_transitions_dev,
-    #                                                                          out_path + data_filename + '_dev')
-    # data_train = feature_extractor.featurize_transitions_dct_svmlightformat(grids_transitions_train)
-    # print('Feat train len: ', len(data_train))
-    # data_test = feature_extractor.featurize_transitions_dct_svmlightformat(grids_transitions_test)
-    # print('Feat test len: ', len(data_test))
-    # y_test = np.asarray([ex[0] for ex in data_test])
-    # model = svmlight.learn(data_train, type='ranking', verbosity=5)
-    # model_filename='models/'+grids_path.split('/')[1]+'_sal'+str(saliency)+'_range'+str(transition_range[0])+"_"+str(transition_range[1])
-    # print('Writing model to ', model_filename)
-    # svmlight.write_model(model, model_filename)
-    # predictions = svmlight.classify(model, data_test)
-    # predictions = np.asarray([int(i) for i in predictions])
-    # acc_score = accuracy_score(y_test, predictions)
-    # print('Model accuracy score: ', acc_score)
-
-    # X_test, y_test, blocks_test = feature_extractor.featurize_transitions_dct(grids_transitions_test)
-    # print('Test len: ', len(grids_transitions_test))
-    # print('Feat test y len: ', len(y_test))
-    # print('Feat test X test len: ', len(X_test))
-    # print('Feat test blocks test len: ', len(blocks_test))
-    # # print('y : ', y_test)
-    # # print('X : ', X_test)
-    # # print('b : ', blocks_test)
-    #
-    # # grids_transitions_train = {grid_x: grids_transitions_dict[grid_x] for grid_x in experiments_split['training'] if type(grid_x) is not float}
-    # # grids_transitions_train = {k:grids_transitions_train[k] for i,k in enumerate(grids_transitions_train.keys()) if i<1000}
-    # #
-    # # Turn feature vector into ranking
-    # X_train, y_train, blocks_train = feature_extractor.featurize_transitions_dct(grids_transitions_train)
-    # print('Train len: ', len(grids_transitions_train))
-    # print('Feat train len: ', len(y_train))
-    #
-    # print('X shape: ', X_test.shape)
-    # print('X : ', X_test[:20])
-    # print('y shape: ', y_test.shape)
-    # print('y: ', y_test[:20])
-    # print('b shape: ', blocks_test.shape)
-    # print('b: ', blocks_test[:20])
-    #
-    # X = np.array of shape (examples_len, feature_vector_len) > array of examples each represented by its feature vector
-    # y = np.array of shape (examples_len,)  > array of predicted order e.g. 0 if high, 1 if low coherence
-    # blocks = np.array of shape (examples_len,) > an array of block tags (int), e.g. use grid_name
-    #
-    #
-    # coef = svm_train(X_train, y_train, blocks_train, 1., X_train.shape[0], X_train.shape[1], learner_type.pegasos, loop_type.rank, eta_type.basic_eta, max_iter=100)
-    # prediction = svm_predict(X_test, coef, blocks=blocks_test)
-    # print('Pred len: ', len(prediction), 'Type: ', type(prediction))
-    # acc_score = accuracy_score(y_test, prediction)
-    # print('Model accuracy score: ', acc_score)
-
 
 def create_path(filename):
     if not os.path.exists(os.path.dirname(filename)):

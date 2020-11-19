@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 import os
 import csv
 from lxml import etree
-from corpus.Corpus import Corpus
+from coherence_models_for_dialogue.corpus.Corpus import Corpus
 """
 Oasis class: loads the corpus into tuples (sentence,DA,prevDA). Provides methods
 to dump the corpus in CSV format with original annotation and with ISO annotation

@@ -2,7 +2,7 @@ from __future__ import unicode_literals
 from __future__ import print_function
 import os
 from collections import OrderedDict
-from corpus.Corpus import Corpus
+from coherence_models_for_dialogue.corpus.Corpus import Corpus
 """
 Maptask class: loads the corpus into tuples (sentence,DA,prevDA). Provides methods
 to dump the corpus in CSV format with original annotation and with ISO annotation
